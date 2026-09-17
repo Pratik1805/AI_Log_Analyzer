@@ -1,6 +1,6 @@
 # 🤖 AI-Powered CI/CD Pipeline Log Analyzer
 
-An automated, serverless incident response tool that integrates **Jenkins CI/CD** with **Amazon Bedrock (Meta llama 3 (8b))** via **AWS Lambda** and **API Gateway**. When a pipeline fails, it extracts recent console logs, eliminates noisy diagnostic output, determines the exact root cause, and emails actionable remediation steps to engineering teams in seconds.
+An automated, serverless incident response tool that integrates **Jenkins CI/CD** with **Amazon Bedrock (Llama 3 8B Instruct)** via **AWS Lambda** and **API Gateway**. When a pipeline fails, it extracts recent console logs, eliminates noisy diagnostic output, determines the exact root cause, and emails actionable remediation steps to engineering teams in seconds.
 
 
 
@@ -19,7 +19,7 @@ flowchart TD
         E -->|Proxy Integration| F[AWS Lambda Python 3.10]
         
         subgraph AI_Inference["AI Layer"]
-            F -->|Converse API Payload| G[Amazon Bedrock Claude 3 Haiku]
+            F -->|Converse API Payload| G[Amazon Bedrock Llama 3 8B Instruct]
             G -->|Actionable Root Cause & Fix| F
         end
 
