@@ -2,10 +2,11 @@
 
 An automated, serverless incident response tool that integrates **Jenkins CI/CD** with **Amazon Bedrock (Meta llama 3 (8b))** via **AWS Lambda** and **API Gateway**. When a pipeline fails, it extracts recent console logs, eliminates noisy diagnostic output, determines the exact root cause, and emails actionable remediation steps to engineering teams in seconds.
 
----
+
 
 ## 📐 Architecture Overview
 
+```mermaid
 flowchart TD
     subgraph CI_CD["CI/CD Layer (Jenkins)"]
         A[Build / Test / Deploy Stage Fails] --> B[Declarative Post Action Triggered]
@@ -35,8 +36,9 @@ flowchart TD
     class A,B,C,D jenkins;
     class E,F,H aws;
     class G ai;
+```
 
----
+
 
 ## ✨ Features
 
