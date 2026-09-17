@@ -1,0 +1,130 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME    = "ecommerce-backend"
+        DOCKER_TAG  = "${env.BUILD_NUMBER}"
+    }
+
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Initialize & Fetch Dependencies') {
+            steps {
+                echo "Initializing workspace..."
+                // Generate lots of noisy "downloading" logs
+                sh '''
+                for i in {1..60}; do
+                    echo "npm verb http fetch GET 200 https://registry.npmjs.org/module-$i 14ms (cache hit)"
+                done
+                echo "added 1432 packages, and audited 1433 packages in 12s"
+                '''
+            }
+        }
+        
+        stage('Parallel Processing') {
+            parallel {
+                stage('Static Analysis') {
+                    steps {
+                        sh '''
+                        echo "Running SonarQube Scanner..."
+                        for i in {1..20}; do echo "INFO: Analyzed file src/components/Comp${i}.js"; done
+                        echo "INFO: Sensor SonarJS [javascript] (done) | time=123ms"
+                        '''
+                    }
+                }
+                stage('Unit Tests') {
+                    steps {
+                        sh '''
+                        echo "PASS src/utils/math.test.js"
+                        echo "PASS src/utils/auth.test.js"
+                        for i in {1..30}; do echo "✓ Test suite $i passed smoothly"; done
+                        '''
+                    }
+                }
+                stage('Security Scan') {
+                    steps {
+                        sh '''
+                        echo "Running Trivy Vulnerability Scanner..."
+                        echo "Analysing base image..."
+                        for i in {1..15}; do echo "DEBUG: Processing package dependency graph node $i"; done
+                        echo "Total: 0 (UNKNOWN: 0, LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0)"
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy Infrastructure (The Failure)') {
+            steps {
+                echo "Running Terraform Apply for zero-touch deployment..."
+                // Generate noisy terraform plan logs
+                sh '''
+                for i in {1..30}; do echo "aws_iam_role_policy.policy_$i: Modifying... [id=policy_$i]"; done
+                echo "aws_s3_bucket.portfolio_bucket: Creating..."
+                echo "aws_s3_bucket.portfolio_bucket: Still creating... [10s elapsed]"
+                '''
+                
+                // 🚨 THE ACTUAL ERROR BURIED AT THE BOTTOM 🚨
+                // We simulate a strict IAM permission boundary blocking an S3 creation
+                sh '''
+                echo "Error: creating S3 Bucket (portfolio_bucket): AccessDenied: Access Denied"
+                echo "status code: 403, request id: 12345ABCDE, host id: xyz123"
+                echo "Error: Failed to apply Terraform configuration."
+
+                exit 1
+                '''
+
+                sh './pre-test.sh'
+                sh './run-tests.sh --coverage'
+            }
+        }
+    }
+
+    post {
+        failure {
+            withCredentials([
+                usernamePassword(credentialsId: 'jenkins-api-token', passwordVariable: 'JENKINS_TOKEN', usernameVariable: 'JENKINS_USER'),
+                string(credentialsId: 'WEBHOOK_URL', variable: 'WEBHOOK_SECRET')
+            ]) {
+                script {
+                    echo "Build failed! Fetching logs via Jenkins API..."
+                    
+                    // Increased tail limit to 200 to capture the noise and the error
+                    sh '''
+                    curl -s -u "${JENKINS_USER}:${JENKINS_TOKEN}" ${BUILD_URL}consoleText | tail -n 200 > raw_logs.txt
+                    '''
+                    
+                    def rawLogs = readFile('raw_logs.txt')
+                    def safeLogs = rawLogs.replace('"', '\\"').replace('\n', '\\n').replace('\r', '')
+
+                    def jsonPayload = """
+                    {
+                        "job_name": "${env.JOB_NAME}",
+                        "build_number": "${env.BUILD_NUMBER}",
+                        "build_url": "${env.BUILD_URL}",
+                        "console_logs": "${safeLogs}"
+                    }
+                    """
+
+                    writeFile file: 'ai_webhook_payload.json', text: jsonPayload
+
+                    sh '''
+                    curl -X POST \
+                         -H "Content-Type: application/json" \
+                         -d @ai_webhook_payload.json \
+                         $WEBHOOK_SECRET
+                    '''
+                }
+            }
+        }
+        
+        always {
+            sh 'rm -f raw_logs.txt ai_webhook_payload.json || true'
+            echo "Cleaning up workspace..."
+            cleanWs()
+        }
+    }   
+}
