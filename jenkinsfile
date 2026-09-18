@@ -84,6 +84,30 @@ pipeline {
     }
 
     post {
+        success {
+            withCredentials([string(credentialsId: 'WEBHOOK_URL', variable: 'WEBHOOK_SECRET')]) {
+                script {
+                    echo "Pipeline succeeded! Notifying SNS..."
+                    def jsonPayload = """
+                    {
+                        "status": "SUCCESS",
+                        "job_name": "${env.JOB_NAME}",
+                        "build_number": "${env.BUILD_NUMBER}",
+                        "build_url": "${env.BUILD_URL}"
+                    }
+                    """
+                    writeFile file: 'success_payload.json', text: jsonPayload
+
+                    sh '''
+                    curl -X POST \
+                         -H "Content-Type: application/json" \
+                         -d @success_payload.json \
+                         $WEBHOOK_SECRET
+                    '''
+                }
+            }
+        }
+        
         failure {
             withCredentials([
                 usernamePassword(credentialsId: 'jenkins-api-token', passwordVariable: 'JENKINS_TOKEN', usernameVariable: 'JENKINS_USER'),
@@ -102,6 +126,7 @@ pipeline {
 
                     def jsonPayload = """
                     {
+                        "status": "FAILURE",
                         "job_name": "${env.JOB_NAME}",
                         "build_number": "${env.BUILD_NUMBER}",
                         "build_url": "${env.BUILD_URL}",
